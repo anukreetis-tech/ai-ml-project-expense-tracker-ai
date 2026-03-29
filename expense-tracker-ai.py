@@ -12,17 +12,32 @@ import numpy as np
 FILE = "expenses.csv"
 
 # ---------------- ML MODEL (Categorization) ----------------
-texts = ["pizza", "burger", "bus", "uber", "movie", "snacks"]
-labels = ["Food", "Food", "Travel", "Travel", "Entertainment", "Food"]
+texts = ["pizza", "burger", "bus", "uber", "movie", "snacks", "train", "coffee"]
+labels = ["Food", "Food", "Travel", "Travel", "Entertainment", "Food", "Travel", "Food"]
 
 vectorizer = CountVectorizer()
 X = vectorizer.fit_transform(texts)
 
-model = MultinomialNB()
-model.fit(X, labels)
+nb_model = MultinomialNB()
+nb_model.fit(X, labels)
 
 def predict_category(text):
-    return model.predict(vectorizer.transform([text]))[0]
+    X_input = vectorizer.transform([text])
+     
+    prediction = nb_model.predict(X_input)[0]
+    probabilities = nb_model.predict_proba(X_input)[0]
+    
+    confidence = max(probabilities)
+
+    print(f"Predicted Category: {prediction} (Confidence: {confidence:.2f})")
+
+    # If confidence is low, ask user to confirm
+    if confidence < 0.6:
+        print("⚠️ Low confidence in prediction.")
+        user_choice = input("Enter correct category (Food/Travel/Entertainment): ")
+        return user_choice
+    
+    return prediction
 
 # ---------------- ADD EXPENSE ----------------
 def add_expense():
@@ -35,63 +50,86 @@ def add_expense():
         writer = csv.writer(file)
         writer.writerow([date, desc, category, amount])
 
-    print(f"Added under category: {category}")
+    print(f"✅ Added under category: {category}")
 
-# ---------------- VIEW & ANALYSIS ----------------
+# ---------------- SUMMARY & VISUALIZATION ----------------
 def show_summary():
     try:
         df = pd.read_csv(FILE, names=["Date", "Desc", "Category", "Amount"])
 
         total = df["Amount"].sum()
-        print("\nTotal Spending:", total)
+        print("\n💰 Total Spending:", total)
 
         category_sum = df.groupby("Category")["Amount"].sum()
-        print("\nCategory-wise:\n", category_sum)
+        print("\n📊 Category-wise Spending:\n", category_sum)
 
-        # Pattern detection
-        print("\nYou spend most on:", category_sum.idxmax())
+        print("\n🔍 You spend most on:", category_sum.idxmax())
 
         category_sum.plot(kind="bar")
         plt.title("Expenses by Category")
+        plt.xlabel("Category")
+        plt.ylabel("Amount")
         plt.show()
 
     except:
-        print("No data found.")
+        print("⚠️ No data found.")
 
-# ---------------- BUDGET ALERT ----------------
-def budget_alert():
-    limit = float(input("Enter your budget: "))
-    df = pd.read_csv(FILE, names=["Date", "Desc", "Category", "Amount"])
+# ---------------- BUDGET STATUS ----------------
+def budget_status(budget):
+    try:
+        df = pd.read_csv(FILE, names=["Date", "Desc", "Category", "Amount"])
+        total = df["Amount"].sum()
 
-    total = df["Amount"].sum()
-    if total > limit:
-        print("⚠️ Budget exceeded!")
-    else:
-        print("Within budget.")p
+        print(f"\n💰 Total Spending: {total}")
+        print(f"🎯 Budget: {budget}")
+
+        remaining = budget - total
+        print(f"💵 Remaining Budget: {remaining}")
+
+        if total > budget:
+            print("⚠️ Budget exceeded!")
+        else:
+            print("✅ You are within budget.")
+
+    except:
+        print("⚠️ No data found.")
 
 # ---------------- PREDICTION ----------------
 def predict_spending():
-    df = pd.read_csv(FILE, names=["Date", "Desc", "Category", "Amount"])
+    try:
+        df = pd.read_csv(FILE, names=["Date", "Desc", "Category", "Amount"])
 
-    df["Day"] = np.arange(len(df))
+        df["Day"] = np.arange(len(df))
 
-    X = df[["Day"]]
-    y = df["Amount"]
+        X = df[["Day"]]
+        y = df["Amount"]
 
-    model = LinearRegression()
-    model.fit(X, y)
-  
-    future_day = np.array([[len(df) + 1]])
-    prediction = model.predict(future_day)
+        lr_model = LinearRegression()
+        lr_model.fit(X, y)
 
-    print("Predicted next expense:", prediction[0])
+        future_day = pd.DataFrame([[len(df) + 1]], columns=["Day"])
+        prediction = lr_model.predict(future_day)
 
-# ---------------- MENU ----------------
+        print(f"📈 Predicted next expense: {prediction[0]:.2f}")
+
+    except:
+        print("⚠️ Not enough data for prediction.")
+
+# ---------------- MAIN MENU ----------------
 def main():
+    print("==== AI Expense Tracker ====")
+    
+    try:
+        budget = float(input("Enter your monthly budget: "))
+    except:
+        print("Invalid input. Setting default budget = 0")
+        budget = 0
+
     while True:
-        print("\n1. Add Expense")
+        print("\n--- MENU ---")
+        print("1. Add Expense")
         print("2. Show Summary")
-        print("3. Budget Alert")
+        print("3. Budget Status")
         print("4. Predict Spending")
         print("5. Exit")
 
@@ -102,13 +140,14 @@ def main():
         elif choice == "2":
             show_summary()
         elif choice == "3":
-            budget_alert()
+            budget_status(budget)
         elif choice == "4":
             predict_spending()
         elif choice == "5":
+            print("Exiting... 👋")
             break
         else:
-            print("Invalid choice")
+            print("❌ Invalid choice")
 
 if __name__ == "__main__":
     main()
